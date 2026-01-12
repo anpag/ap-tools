@@ -320,7 +320,7 @@ def main():
     parser.add_argument('--project_id', type=str, help='GCP Project ID', required=False)
     parser.add_argument('--output_dir', type=str, default='bq_export_results', help='Directory to save results')
     parser.add_argument('--mode', type=str, choices=['all', 'config', 'storage', 'queries'], default='all', help='Export mode')
-    parser.add_argument('--days', type=int, default=30, help='Number of days for query history (default: 30)')
+    parser.add_argument('--days', type=int, default=7, help='Number of days for query history (default: 7)')
     parser.add_argument('--exclude_user', type=str, help='Email of user to exclude from query stats')
 
     args = parser.parse_args()

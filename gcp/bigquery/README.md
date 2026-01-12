@@ -33,18 +33,26 @@ python bq_exporter.py --project_id YOUR_PROJECT_ID [OPTIONS]
 ### Options
 
 - `--mode`: Select export mode. Choices: `all` (default), `config`, `storage`, `queries`.
-- `--days`: Number of days for query history (default: 30).
+- `--days`: Number of days for query history (default: 7).
 - `--exclude_user`: Email of user to exclude from query stats.
 - `--output_dir`: Directory to save results (default: `bq_export_results`).
 
 ### Examples
 
-Export everything:
+**Recommended: Export Everything (Default)**
+This is the standard way to run the tool. It exports configuration, storage stats, and query history for the last 7 days.
 ```bash
 python bq_exporter.py --project_id my-project
 ```
 
-Export only storage stats:
+**Export with Extended History**
+> **Warning:** Exporting query history for long periods (e.g., 30+ days) can result in very large CSV files and longer execution times. We recommend sticking to the default (7 days) or testing with a smaller range first.
+```bash
+python bq_exporter.py --project_id my-project --days 30
+```
+
+**Export Only Storage Stats**
+Useful for quick storage audits without waiting for query history processing.
 ```bash
 python bq_exporter.py --mode storage
 ```
