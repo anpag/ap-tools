@@ -7,6 +7,7 @@ This script exports schemas, configuration, and usage statistics for BigQuery da
 - Exports dataset configurations and table schemas to JSON.
 - Exports storage usage (rows, logical/physical bytes) to CSV.
 - Exports query history (last N days) to CSV.
+- **Automatic Compression**: Archives the output directory into a ZIP file by default.
 - Automatically handles permission errors by falling back to slower API iteration.
 - Filters out "Linked" datasets (Analytics Hub) and Views from storage reports.
 
@@ -36,11 +37,12 @@ python bq_exporter.py --project_id YOUR_PROJECT_ID [OPTIONS]
 - `--days`: Number of days for query history (default: 7).
 - `--exclude_user`: Email of user to exclude from query stats.
 - `--output_dir`: Directory to save results (default: `bq_export_results`).
+- `--no-compress`: Disable automatic compression of the results directory.
 
 ### Examples
 
 **Recommended: Export Everything (Default)**
-This is the standard way to run the tool. It exports configuration, storage stats, and query history for the last 7 days.
+This exports configuration, storage stats, and query history for the last 7 days, and automatically compresses the results into a ZIP file.
 ```bash
 python bq_exporter.py --project_id my-project
 ```
@@ -51,8 +53,8 @@ python bq_exporter.py --project_id my-project
 python bq_exporter.py --project_id my-project --days 30
 ```
 
-**Export Only Storage Stats**
-Useful for quick storage audits without waiting for query history processing.
+**Export Only Storage Stats (No Compression)**
+Useful for quick storage audits where you need to inspect the CSV immediately without unzipping.
 ```bash
-python bq_exporter.py --mode storage
+python bq_exporter.py --mode storage --no-compress
 ```

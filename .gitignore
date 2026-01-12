@@ -5,3 +5,4 @@ __pycache__/
 bq_export_results/
 *.csv
 *.json
+*.zip

@@ -2,6 +2,7 @@ import argparse
 import json
 import csv
 import os
+import shutil
 import datetime
 from google.cloud import bigquery
 from google.api_core.exceptions import NotFound, Forbidden
@@ -322,6 +323,7 @@ def main():
     parser.add_argument('--mode', type=str, choices=['all', 'config', 'storage', 'queries'], default='all', help='Export mode')
     parser.add_argument('--days', type=int, default=7, help='Number of days for query history (default: 7)')
     parser.add_argument('--exclude_user', type=str, help='Email of user to exclude from query stats')
+    parser.add_argument('--no-compress', action='store_true', help='Do not compress the output directory')
 
     args = parser.parse_args()
 
@@ -349,6 +351,11 @@ def main():
         export_query_usage(client, project_id, args.output_dir, args.days, args.exclude_user)
 
     print(f"\nAll requested exports completed. Check directory: {args.output_dir}")
+
+    if not args.no_compress:
+        print("Compressing output...")
+        shutil.make_archive(args.output_dir, 'zip', args.output_dir)
+        print(f"Compressed output saved to: {args.output_dir}.zip")
 
 if __name__ == "__main__":
     main()
