@@ -2,6 +2,7 @@ import csv
 import os
 import argparse
 import datetime
+import concurrent.futures
 from google.cloud import bigquery
 from google.cloud import resourcemanager_v3
 
@@ -13,11 +14,14 @@ def get_active_projects(parent_id):
     projects = []
     
     # Discovery from API
-    for project in client.search_projects(request=request):
-        projects.append({
-            "project_id": project.project_id,
-            "labels": project.labels
-        })
+    try:
+        for project in client.search_projects(request=request):
+            projects.append({
+                "project_id": project.project_id,
+                "labels": project.labels
+            })
+    except Exception as e:
+        print(f"Warning: Error searching projects: {e}")
     
     # Fallback for testing: Add projects discovered via billing earlier
     known_projects = [
@@ -29,14 +33,15 @@ def get_active_projects(parent_id):
     existing_ids = [p["project_id"] for p in projects]
     for k_id in known_projects:
         if k_id not in existing_ids:
-            # We won't have labels for these unless we fetch them individually, 
-            # but for testing usage it's fine.
             projects.append({"project_id": k_id, "labels": {}})
             
     return projects
 
 def analyze_slots(project_id, labels, regions=['region-us', 'region-eu']):
     """Analyzes slot usage for a project across specified regions."""
+    # Note: Creating a client is lightweight, but in high concurrency scenarios
+    # it might be better to pass a shared client if projects share credentials.
+    # However, for different projects, new clients are safer.
     client = bigquery.Client(project=project_id)
     results = []
     
@@ -53,6 +58,7 @@ def analyze_slots(project_id, labels, regions=['region-us', 'region-eu']):
 
     for region in regions:
         try:
+            # We catch specific errors to avoid breaking the thread
             query = query_template.format(region=region)
             query_job = client.query(query)
             rows = query_job.result()
@@ -68,22 +74,48 @@ def analyze_slots(project_id, labels, regions=['region-us', 'region-eu']):
                 }
                 results.append(res)
         except Exception:
+            # Silently skip regions where IS is invalid or API is disabled
             continue
             
     return results
 
-def main(parent_id, regions, output_file="slot_usage_report.csv"):
+def process_project_wrapper(args):
+    """Wrapper function to unpack arguments for the thread executor."""
+    project_data, regions = args
+    try:
+        # print is thread-safe in Python but output can interleave
+        print(f"  [Start] Analyzing {project_data['project_id']}...")
+        result = analyze_slots(project_data['project_id'], project_data['labels'], regions)
+        if result:
+            print(f"    [Done] {project_data['project_id']}: Found {len(result)} records.")
+        else:
+            print(f"    [Done] {project_data['project_id']}: No usage.")
+        return result
+    except Exception as e:
+        print(f"    [Error] {project_data['project_id']}: {e}")
+        return []
+
+def main(parent_id, regions, output_file="slot_usage_report.csv", concurrency=5):
     print(f"Starting Slot Analysis for Parent: {parent_id}")
+    print(f"Concurrency Level: {concurrency} threads")
+    
     projects = get_active_projects(parent_id)
     print(f"Processing {len(projects)} projects (including billing-discovered fallbacks)...")
     
     all_usage = []
-    for p in projects:
-        print(f"  Analyzing {p['project_id']}...")
-        usage = analyze_slots(p['project_id'], p['labels'], regions)
-        if usage:
-            print(f"    Found {len(usage)} data points.")
-        all_usage.extend(usage)
+    
+    # Prepare arguments for map
+    # We pass a tuple (project_dict, regions_list) to the wrapper
+    work_items = [(p, regions) for p in projects]
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
+        # Map returns an iterator that yields results as they complete (or in order if map is used)
+        # Using map maintains order, submit+as_completed allows processing as they finish.
+        # We use map for simplicity here as we just collect all results.
+        results_iterator = executor.map(process_project_wrapper, work_items)
+        
+        for result in results_iterator:
+            all_usage.extend(result)
     
     if not all_usage:
         print("No slot usage found in the last 30 days.")
@@ -103,7 +135,8 @@ if __name__ == "__main__":
     parser.add_argument("parent_id", help="The parent resource ID to search (e.g., organizations/12345 or folders/67890)")
     parser.add_argument("--output", default="slot_usage_report.csv", help="Output CSV file path (default: slot_usage_report.csv)")
     parser.add_argument("--regions", nargs="+", default=['region-us', 'region-eu'], help="Regions to analyze (e.g., region-us region-europe-west2). Defaults to region-us and region-eu.")
+    parser.add_argument("--concurrency", type=int, default=5, help="Number of simultaneous project queries (Default: 5). Increase carefully to avoid rate limits.")
     
     args = parser.parse_args()
     
-    main(args.parent_id, args.regions, args.output)
+    main(args.parent_id, args.regions, args.output, args.concurrency)
