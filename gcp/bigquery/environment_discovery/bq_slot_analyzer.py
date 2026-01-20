@@ -1,5 +1,6 @@
 import csv
 import os
+import argparse
 import datetime
 from google.cloud import bigquery
 from google.cloud import resourcemanager_v3
@@ -98,5 +99,10 @@ def main(parent_id, output_file="slot_usage_report.csv"):
     print(f"\nSuccess! Report saved to {output_file}")
 
 if __name__ == "__main__":
-    ORG_ID = "organizations/672970166928"
-    main(ORG_ID)
+    parser = argparse.ArgumentParser(description="Recursively analyze BigQuery slot usage for all projects under an Org or Folder.")
+    parser.add_argument("parent_id", help="The parent resource ID to search (e.g., organizations/12345 or folders/67890)")
+    parser.add_argument("--output", default="slot_usage_report.csv", help="Output CSV file path (default: slot_usage_report.csv)")
+    
+    args = parser.parse_args()
+    
+    main(args.parent_id, args.output)
