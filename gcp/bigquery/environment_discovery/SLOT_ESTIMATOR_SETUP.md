@@ -80,3 +80,29 @@ detail: Fail to resolve resource 'projects/.../recommenders/google.bigquery.capa
 2.  **Generate Load:** Run the load generator script.
 3.  **Wait:** Wait 24-48 hours for the backend to register the usage and instantiate the endpoint.
 4.  **Retry:** Once the endpoint is active, the command will return either a list of recommendations or an empty list (instead of an error).
+
+## 6. Finding Candidate Projects via Billing
+
+If you manage many projects and don't know which one has enough usage to show a recommendation, use the **Billing Export** (if enabled) to find the top consumers of BigQuery *Compute*.
+
+**Why:** A project with high cost might just be storing data (Storage SKU). The Slot Estimator requires **Analysis** (Compute) usage.
+
+**Query:**
+Run this in your Billing/Administration project:
+
+```sql
+SELECT 
+    project.id, 
+    SUM(cost) as compute_cost, 
+    SUM(usage.amount) as scanned_bytes, 
+    MAX(sku.description) as example_sku 
+FROM `[BILLING_PROJECT].detailed_cost.gcp_billing_export_v1_...` 
+WHERE service.description = 'BigQuery' 
+  AND sku.description LIKE '%Analysis%'  -- Filter for Compute only
+  AND usage_start_time > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY) 
+GROUP BY 1 
+ORDER BY 2 DESC 
+LIMIT 5
+```
+*   **Result:** The top project from this list is your best candidate for the Slot Estimator demo.
+*   **Action:** Enable the `recommender.googleapis.com` API on that specific project.
