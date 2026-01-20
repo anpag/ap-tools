@@ -72,7 +72,7 @@ def analyze_slots(project_id, labels, regions=['region-us', 'region-eu']):
             
     return results
 
-def main(parent_id, output_file="slot_usage_report.csv"):
+def main(parent_id, regions, output_file="slot_usage_report.csv"):
     print(f"Starting Slot Analysis for Parent: {parent_id}")
     projects = get_active_projects(parent_id)
     print(f"Processing {len(projects)} projects (including billing-discovered fallbacks)...")
@@ -80,7 +80,7 @@ def main(parent_id, output_file="slot_usage_report.csv"):
     all_usage = []
     for p in projects:
         print(f"  Analyzing {p['project_id']}...")
-        usage = analyze_slots(p['project_id'], p['labels'])
+        usage = analyze_slots(p['project_id'], p['labels'], regions)
         if usage:
             print(f"    Found {len(usage)} data points.")
         all_usage.extend(usage)
@@ -102,7 +102,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Recursively analyze BigQuery slot usage for all projects under an Org or Folder.")
     parser.add_argument("parent_id", help="The parent resource ID to search (e.g., organizations/12345 or folders/67890)")
     parser.add_argument("--output", default="slot_usage_report.csv", help="Output CSV file path (default: slot_usage_report.csv)")
+    parser.add_argument("--regions", nargs="+", default=['region-us', 'region-eu'], help="Regions to analyze (e.g., region-us region-europe-west2). Defaults to region-us and region-eu.")
     
     args = parser.parse_args()
     
-    main(args.parent_id, args.output)
+    main(args.parent_id, args.regions, args.output)
