@@ -63,3 +63,20 @@ FROM `region-us`.INFORMATION_SCHEMA.JOBS_BY_PROJECT
 WHERE creation_time > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 24 HOUR)
 ```
 If `total_slot_ms` is low (< 10,000 ms), the estimator will likely remain silent.
+
+## 5. Troubleshooting: "Fail to resolve resource"
+
+When using the CLI to fetch recommendations for a new project, you may see this error:
+
+```
+ERROR: (gcloud.recommender.recommendations.list) INVALID_ARGUMENT: 
+detail: Fail to resolve resource 'projects/.../recommenders/google.bigquery.capacityCommitment.Recommender'
+```
+
+**Cause:** The BigQuery Slot Recommender endpoint is **dynamic**. Google Cloud only instantiates the recommender resource for a project once it detects sufficient historical usage to even *attempt* a calculation.
+
+**Resolution:**
+1.  **Do not panic.** This confirms the project is in a "Cold Start" state.
+2.  **Generate Load:** Run the load generator script.
+3.  **Wait:** Wait 24-48 hours for the backend to register the usage and instantiate the endpoint.
+4.  **Retry:** Once the endpoint is active, the command will return either a list of recommendations or an empty list (instead of an error).
