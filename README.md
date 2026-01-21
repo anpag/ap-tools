@@ -11,6 +11,9 @@ A collection of utility scripts and tools for various engineering tasks.
   - A comprehensive tool to export BigQuery schemas, dataset configurations, storage usage, and query history.
   - Supports filtering external/linked datasets.
   - Generates JSON configs and CSV reports.
+- **[BigQuery Environment Discovery](gcp/bigquery/environment_discovery/README.md)**
+  - Automated workflows and tools to inventory jobs, slots, and usage across an entire GCP Organization.
+  - Includes `bq-inventory-workflow` for multi-region `INFORMATION_SCHEMA` centralization.
 
 ## Getting Started
 

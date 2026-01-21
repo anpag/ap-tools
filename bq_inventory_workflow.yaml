@@ -1,0 +1,56 @@
+main:
+  params: []
+  steps:
+    - init:
+        assign:
+          - project_id: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
+          - dest_table: "antoniopaulino-billing.bq_inventory.jobs_all_projects"
+          - parent_id: "organizations/672970166928" # Your Organization ID
+    - get_projects:
+        call: http.get
+        args:
+          url: https://cloudresourcemanager.googleapis.com/v3/projects
+          auth:
+            type: OAuth2
+          query:
+            parent: ${parent_id}
+        result: projects_result
+    - iterate_projects:
+        for:
+          value: project
+          in: ${projects_result.body.projects}
+          steps:
+            - iterate_regions:
+                for:
+                  value: region
+                  in: ["us", "eu", "africa-south1", "asia-east1", "asia-east2", "asia-northeast1", "asia-northeast2", "asia-northeast3", "asia-south1", "asia-south2", "asia-southeast1", "asia-southeast2", "asia-southeast3", "australia-southeast1", "australia-southeast2", "europe-central2", "europe-north1", "europe-north2", "europe-southwest1", "europe-west1", "europe-west10", "europe-west12", "europe-west2", "europe-west3", "europe-west4", "europe-west6", "europe-west8", "europe-west9", "me-central1", "me-central2", "me-west1", "northamerica-northeast1", "northamerica-northeast2", "northamerica-south1", "southamerica-east1", "southamerica-west1", "us-central1", "us-east1", "us-east4", "us-east5", "us-south1", "us-west1", "us-west2", "us-west3", "us-west4"]
+                  steps:
+                    - run_bq_query:
+                        try:
+                          call: http.post
+                          args:
+                            url: ${"https://bigquery.googleapis.com/bigquery/v2/projects/" + project.projectId + "/jobs"}
+                            auth:
+                              type: OAuth2
+                            body:
+                              configuration:
+                                query:
+                                  query: ${"INSERT INTO `" + dest_table + "` SELECT * FROM `" + project.projectId + ".region-" + region + ".INFORMATION_SCHEMA.JOBS` WHERE creation_time > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 DAY)"}
+                                  useLegacySql: false
+                        except:
+                          as: e
+                          steps:
+                            - assign_error_vars:
+                                assign:
+                                  - project_id_str: ${project.projectId}
+                                  - region_str: ${region}
+                                  - error_message_str: ${e.message}
+                            - log_error:
+                                call: sys.log
+                                args:
+                                  text: |
+                                    Failed to sync jobs for project ${project_id_str} in region ${region_str}.
+                                    Error: ${error_message_str}
+                                  severity: "WARNING"
+    - final_step:
+        return: "Workflow completed successfully."

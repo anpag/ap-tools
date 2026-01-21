@@ -1,60 +1,49 @@
-# BigQuery Metadata & Usage Exporter
+# BigQuery Environment Discovery & Inventory
 
-This script exports schemas, configuration, and usage statistics for BigQuery datasets and tables. It supports filtering out linked/external datasets and provides fallback mechanisms for permissions issues.
+This module provides tools and workflows to discover, inventory, and analyze BigQuery usage across your Google Cloud Organization. It centralizes metadata about jobs, slots, and reservations to enable cost optimization and performance analysis.
 
-## Features
+## Components
 
-- Exports dataset configurations and table schemas to JSON.
-- Exports storage usage (rows, logical/physical bytes) to CSV.
-- Exports query history (last N days) to CSV.
-- **Automatic Compression**: Archives the output directory into a ZIP file by default.
-- Automatically handles permission errors by falling back to slower API iteration.
-- Filters out "Linked" datasets (Analytics Hub) and Views from storage reports.
+### 1. BigQuery Inventory Workflow (`bq-inventory-workflow`)
+A Google Cloud Workflow that automates the daily export of `INFORMATION_SCHEMA.JOBS` from all projects and regions into a centralized BigQuery table.
 
-## Setup
+*   **Goal:** Create a unified history of all BigQuery jobs across the organization.
+*   **Mechanism:**
+    *   Iterates through all projects in the Organization.
+    *   Iterates through all Google Cloud Regions (US, EU, us-central1, europe-west1, etc.).
+    *   Exports the last 24 hours of job history to `antoniopaulino-billing.bq_inventory.jobs_all_projects`.
+    *   Handles errors gracefully (e.g., if a project has no dataset in a specific region).
 
-1. Install requirements:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 2. BigQuery Exporter (`bq_exporter.py`)
+A Python utility to manually export BigQuery `INFORMATION_SCHEMA` views to a GCS bucket or local files. useful for ad-hoc snapshots or backup.
 
-2. Authenticate with Google Cloud:
-   ```bash
-   gcloud auth application-default login
-   ```
+### 3. Slot Analyzer (`bq_slot_analyzer.py`)
+A Python tool to analyze slot usage and reservation utilization.
 
-## Usage
+## Setup & Deployment
 
-Run the script from the command line:
+### Prerequisites
+*   Google Cloud Project (e.g., `antoniopaulino-billing`)
+*   Service Account with permissions:
+    *   `BigQuery Admin` or `Resource Viewer` (Organization Level)
+    *   `BigQuery Data Editor` (Destination Project)
+    *   `Workflows Invoker`
+
+### Deploying the Workflow
+The workflow is defined in `bq_inventory_workflow.yaml`. Deploy it using the `gcloud` CLI:
 
 ```bash
-python bq_exporter.py --project_id YOUR_PROJECT_ID [OPTIONS]
+gcloud workflows deploy bq-inventory-workflow \
+    --source=bq_inventory_workflow.yaml \
+    --location=us-central1 \
+    --project=antoniopaulino-billing
 ```
 
-### Options
+### Scheduling
+The workflow is triggered by a Cloud Scheduler job (e.g., `bq-inventory-trigger`) that runs daily.
 
-- `--mode`: Select export mode. Choices: `all` (default), `config`, `storage`, `queries`.
-- `--days`: Number of days for query history (default: 7).
-- `--exclude_user`: Email of user to exclude from query stats.
-- `--output_dir`: Directory to save results (default: `bq_export_results`).
-- `--no-compress`: Disable automatic compression of the results directory.
+## Data Schema
+The centralized table `antoniopaulino-billing.bq_inventory.jobs_all_projects` matches the schema of `INFORMATION_SCHEMA.JOBS`.
 
-### Examples
-
-**Recommended: Export Everything (Default)**
-This exports configuration, storage stats, and query history for the last 7 days, and automatically compresses the results into a ZIP file.
-```bash
-python bq_exporter.py --project_id my-project
-```
-
-**Export with Extended History**
-> **Warning:** Exporting query history for long periods (e.g., 30+ days) can result in very large CSV files and longer execution times. We recommend sticking to the default (7 days) or testing with a smaller range first.
-```bash
-python bq_exporter.py --project_id my-project --days 30
-```
-
-**Export Only Storage Stats (No Compression)**
-Useful for quick storage audits where you need to inspect the CSV immediately without unzipping.
-```bash
-python bq_exporter.py --mode storage --no-compress
-```
+## Known Limitations
+*   **Self-Referential Jobs:** Jobs that query or write to the destination inventory table itself are currently excluded from the sync to prevent recursion or locking issues.
